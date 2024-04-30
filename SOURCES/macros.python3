@@ -1,30 +1,28 @@
 # nb: $RPM_BUILD_ROOT is not set when the macros are expanded (at spec parse time)
 #     so we set it manually (to empty string), making our Python prefer the correct install scheme location
-%python3_sitelib %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_path('purelib'))")
-%python3_sitearch %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_path('platlib'))")
+# platbase/base is explicitly set to %%{_prefix} to support custom values, such as /app for flatpaks
+%python3_sitelib %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '%{_prefix}', 'base': '%{_prefix}'}))")
+%python3_sitearch %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '%{_prefix}', 'base': '%{_prefix}'}))")
 %python3_version %(RPM_BUILD_ROOT= %{__python3} -Ic "import sys; sys.stdout.write('{0.major}.{0.minor}'.format(sys.version_info))")
 %python3_version_nodots %(RPM_BUILD_ROOT= %{__python3} -Ic "import sys; sys.stdout.write('{0.major}{0.minor}'.format(sys.version_info))")
 %python3_platform %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_platform())")
 %python3_platform_triplet %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_config_var('MULTIARCH'))")
 %python3_ext_suffix %(RPM_BUILD_ROOT= %{__python3} -Ic "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+%python3_cache_tag %(RPM_BUILD_ROOT= %{__python3} -Ic "import sys; print(sys.implementation.cache_tag)")
 %py3dir %{_builddir}/python3-%{name}-%{version}-%{release}
 
-%py3_shbang_opts -s
+%_py3_shebang_s s
+%_py3_shebang_P %(RPM_BUILD_ROOT= %{__python3} -Ic "import sys; print('P' if hasattr(sys.flags, 'safe_path') else '')")
+%py3_shbang_opts -%{?_py3_shebang_s}%{?_py3_shebang_P}
 %py3_shbang_opts_nodash %(opts=%{py3_shbang_opts}; echo ${opts#-})
 %py3_shebang_flags %(opts=%{py3_shbang_opts}; echo ${opts#-})
 %py3_shebang_fix %{expand:\\\
-  if [ -f /usr/bin/pathfix%{python3_version}.py ]; then
-    pathfix=/usr/bin/pathfix%{python3_version}.py
-  else
-    # older versions of Python don't have it and must BR /usr/bin/pathfix.py from python3-devel explicitly
-    pathfix=/usr/bin/pathfix.py
-  fi
   if [ -z "%{?py3_shebang_flags}" ]; then
     shebang_flags="-k"
   else
     shebang_flags="-ka%{py3_shebang_flags}"
   fi
-  $pathfix -pni %{__python3} $shebang_flags}
+  %{__python3} -B %{_rpmconfigdir}/redhat/pathfix.py -pni %{__python3} $shebang_flags}
 
 # Use the slashes after expand so that the command starts on the same line as
 # the macro
@@ -56,7 +54,7 @@
 }
 
 %py3_install_wheel() %{expand:\\\
-  %{__python3} -m pip install -I dist/%{1} --root %{buildroot} --no-deps --no-index --no-warn-script-location
+  %{__python3} -m pip install -I dist/%{1} --root %{buildroot} --prefix %{_prefix} --no-deps --no-index --no-warn-script-location
   rm -rfv %{buildroot}%{_bindir}/__pycache__
   for distinfo in %{buildroot}%{python3_sitelib}/*.dist-info %{buildroot}%{python3_sitearch}/*.dist-info; do
     if [ -f ${distinfo}/direct_url.json ]; then
@@ -102,16 +100,21 @@
     pyminor = path:match("/python3.(%d+)/") or "*"
     dirname = path:match("(.*/)")
     modulename = path:match(".*/([^/]+).py")
+    -- %%python3_cache_tag is not used here because this macro supports not-installed CPythons
     print("\\n" .. dirname .. "__pycache__/" .. modulename .. ".cpython-3" .. pyminor .. "{,.opt-?}.pyc")
   end
 }
 
-# This is intended for Python 3 only, hence also no Python version in the name.
-%__pytest /usr/bin/pytest%(test %{python3_pkgversion} == 3 || echo -%{python3_version})
-%pytest %{expand:\\\
+# Environment variables used by %%pytest, %%tox or standalone, e.g.:
+#  %%{py3_test_envvars} %%{python3} -m unittest
+%py3_test_envvars %{expand:\\\
   CFLAGS="${CFLAGS:-${RPM_OPT_FLAGS}}" LDFLAGS="${LDFLAGS:-${RPM_LD_FLAGS}}"\\\
   PATH="%{buildroot}%{_bindir}:$PATH"\\\
   PYTHONPATH="${PYTHONPATH:-%{buildroot}%{python3_sitearch}:%{buildroot}%{python3_sitelib}}"\\\
   PYTHONDONTWRITEBYTECODE=1\\\
   %{?__pytest_addopts:PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} %{__pytest_addopts}"}\\\
-  %__pytest}
+  PYTEST_XDIST_AUTO_NUM_WORKERS=%{_smp_build_ncpus}}
+
+# This is intended for Python 3 only, hence also no Python version in the name.
+%__pytest /usr/bin/pytest%(test %{python3_pkgversion} == 3 || echo -%{python3_version})
+%pytest %py3_test_envvars %__pytest

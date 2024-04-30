@@ -1,12 +1,13 @@
 Name:           python-rpm-macros
 Version:        3.9
-Release:        52%{?dist}
+Release:        53%{?dist}
 Summary:        The common Python RPM macros
 URL:            https://src.fedoraproject.org/rpms/python-rpm-macros/
 
 # macros and lua: MIT
 # import_all_modules.py: MIT
 # compileall2.py: PSFv2
+# pathfix.py: PSFv2
 License:        MIT and Python
 
 # Macros:
@@ -22,6 +23,8 @@ Source201:      python.lua
 %global compileall2_version 0.7.1
 Source301:      https://github.com/fedora-python/compileall2/raw/v%{compileall2_version}/compileall2.py
 Source302:      import_all_modules.py
+%global pathfix_version 1.0.0
+Source303:      https://github.com/fedora-python/pathfix/raw/v%{pathfix_version}/pathfix.py
 
 BuildArch:      noarch
 
@@ -83,6 +86,10 @@ RPM macros for building Python 3 packages.
 %autosetup -c -T
 cp -a %{sources} .
 
+# We want to have shebang in the script upstream but not here so
+# the package with macros does not depend on Python.
+sed -i '1s=^#!/usr/bin/env python3==' pathfix.py
+
 
 %install
 mkdir -p %{buildroot}%{rpmmacrodir}
@@ -95,6 +102,8 @@ mkdir -p %{buildroot}%{_rpmconfigdir}/redhat
 install -m 644 compileall2.py %{buildroot}%{_rpmconfigdir}/redhat/
 install -m 644 import_all_modules.py %{buildroot}%{_rpmconfigdir}/redhat/
 
+install -m 644 pathfix.py %{buildroot}%{_rpmconfigdir}/redhat/
+
 
 %check
 # no macros in comments
@@ -105,6 +114,7 @@ install -m 644 import_all_modules.py %{buildroot}%{_rpmconfigdir}/redhat/
 %{rpmmacrodir}/macros.python
 %{rpmmacrodir}/macros.pybytecompile
 %{_rpmconfigdir}/redhat/import_all_modules.py
+%{_rpmconfigdir}/redhat/pathfix.py
 
 %files -n python-srpm-macros
 %{rpmmacrodir}/macros.python-srpm
@@ -116,6 +126,10 @@ install -m 644 import_all_modules.py %{buildroot}%{_rpmconfigdir}/redhat/
 
 
 %changelog
+* Thu Nov 02 2023 Tomas Orsava <torsava@redhat.com> - 3.9-53
+- Update macros from Fedora and add pathfix.py into python-rpm-macros
+- Resolves: RHEL-6107
+
 * Tue Feb 08 2022 Tomas Orsava <torsava@redhat.com> - 3.9-52
 - %%py_provides: Do not generate Obsoletes for names containing parentheses
 - Related: rhbz#1990421

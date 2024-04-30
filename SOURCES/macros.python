@@ -2,31 +2,29 @@
 # __python is defined to error by default in the srpm macros
 # nb: $RPM_BUILD_ROOT is not set when the macros are expanded (at spec parse time)
 #     so we set it manually (to empty string), making our Python prefer the correct install scheme location
-%python_sitelib %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_path('purelib'))")
-%python_sitearch %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_path('platlib'))")
+# platbase/base is explicitly set to %%{_prefix} to support custom values, such as /app for flatpaks
+%python_sitelib %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_path('purelib', vars={'platbase': '%{_prefix}', 'base': '%{_prefix}'}))")
+%python_sitearch %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '%{_prefix}', 'base': '%{_prefix}'}))")
 %python_version %(RPM_BUILD_ROOT= %{__python} -Esc "import sys; sys.stdout.write('{0.major}.{0.minor}'.format(sys.version_info))")
 %python_version_nodots %(RPM_BUILD_ROOT= %{__python} -Esc "import sys; sys.stdout.write('{0.major}{0.minor}'.format(sys.version_info))")
 %python_platform %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_platform())")
 %python_platform_triplet %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_config_var('MULTIARCH'))")
 %python_ext_suffix %(RPM_BUILD_ROOT= %{__python} -Esc "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+%python3_cache_tag %(RPM_BUILD_ROOT= %{__python3} -Ic "import sys; print(sys.implementation.cache_tag)")
 
 %py_setup setup.py
-%py_shbang_opts -s
+%_py_shebang_s s
+%_pyshebang_P %(RPM_BUILD_ROOT= %{__python} -Esc "import sys; print('P' if hasattr(sys.flags, 'safe_path') else '')")
+%py_shbang_opts -%{?_py_shebang_s}%{?_py_shebang_P}
 %py_shbang_opts_nodash %(opts=%{py_shbang_opts}; echo ${opts#-})
 %py_shebang_flags %(opts=%{py_shbang_opts}; echo ${opts#-})
 %py_shebang_fix %{expand:\\\
-  if [ -f /usr/bin/pathfix%{python_version}.py ]; then
-    pathfix=/usr/bin/pathfix%{python_version}.py
-  else
-    # older versions of Python don't have it and must BR /usr/bin/pathfix.py from python3-devel explicitly
-    pathfix=/usr/bin/pathfix.py
-  fi
   if [ -z "%{?py_shebang_flags}" ]; then
     shebang_flags="-k"
   else
     shebang_flags="-ka%{py_shebang_flags}"
   fi
-  $pathfix -pni %{__python} $shebang_flags}
+  %{__python} -B %{_rpmconfigdir}/redhat/pathfix.py -pni %{__python} $shebang_flags}
 
 # Use the slashes after expand so that the command starts on the same line as
 # the macro
@@ -58,7 +56,7 @@
 }
 
 %py_install_wheel() %{expand:\\\
-  %{__python} -m pip install -I dist/%{1} --root %{buildroot} --no-deps --no-index --no-warn-script-location
+  %{__python} -m pip install -I dist/%{1} --root %{buildroot} --prefix %{_prefix} --no-deps --no-index --no-warn-script-location
   rm -rfv %{buildroot}%{_bindir}/__pycache__
   for distinfo in %{buildroot}%{python_sitelib}/*.dist-info %{buildroot}%{python_sitearch}/*.dist-info; do
     if [ -f ${distinfo}/direct_url.json ]; then
@@ -132,6 +130,16 @@
     print(" not recognized.")
   end
 }
+
+# Environment variables for testing used standalone, e.g.:
+#  %%{py_test_envvars} %%{python} -m unittest
+%py_test_envvars %{expand:\\\
+  CFLAGS="${CFLAGS:-${RPM_OPT_FLAGS}}" LDFLAGS="${LDFLAGS:-${RPM_LD_FLAGS}}"\\\
+  PATH="%{buildroot}%{_bindir}:$PATH"\\\
+  PYTHONPATH="${PYTHONPATH:-%{buildroot}%{python_sitearch}:%{buildroot}%{python_sitelib}}"\\\
+  PYTHONDONTWRITEBYTECODE=1\\\
+  %{?__pytest_addopts:PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} %{__pytest_addopts}"}\\\
+  PYTEST_XDIST_AUTO_NUM_WORKERS=%{_smp_build_ncpus}}
 
 %python_disable_dependency_generator() \
 %undefine __pythondist_requires \
