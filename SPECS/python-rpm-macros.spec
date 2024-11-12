@@ -1,6 +1,6 @@
 Name:           python-rpm-macros
 Version:        3.9
-Release:        53%{?dist}
+Release:        54%{?dist}
 Summary:        The common Python RPM macros
 URL:            https://src.fedoraproject.org/rpms/python-rpm-macros/
 
@@ -126,6 +126,9 @@ install -m 644 pathfix.py %{buildroot}%{_rpmconfigdir}/redhat/
 
 
 %changelog
+* Tue Jun 25 2024 Cristian Le <fedora@lecris.me> - 3.9-54
+- %%python_extras_subpkg: Add option -a to include BuildArch: noarch
+
 * Thu Nov 02 2023 Tomas Orsava <torsava@redhat.com> - 3.9-53
 - Update macros from Fedora and add pathfix.py into python-rpm-macros
 - Resolves: RHEL-6107
