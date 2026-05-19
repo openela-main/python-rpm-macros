@@ -55,7 +55,7 @@ elseif posix.stat('macros.python-srpm') then
 end
 }
 Version:        %{__default_python3_version}
-Release:        10%{?dist}
+Release:        11%{?dist}
 
 BuildArch:      noarch
 
@@ -167,6 +167,11 @@ grep -E '^#[^%%]*%%[^%%]' %{buildroot}%{rpmmacrodir}/macros.* && exit 1 || true
 
 
 %changelog
+* Tue Sep 09 2025 Miro Hrončok <mhroncok@redhat.com> - 3.12-11
+- %%python_extras_subpkg: Add -v option to specify the required version(-release)
+- This is useful when the extras are built from a different specfile (e.g. in EPEL for a RHEL base package)
+- Resolves: RHEL-117448
+
 * Mon Apr 07 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 3.12-10
 - Add brp script to modify .dist-info/INSTALLER file
 - Resolves: RHEL-86802
